@@ -1,0 +1,81 @@
+# IP Camera Proxy Configuration
+# All URLs redirect to /browserfs.html (camera view)
+# Only required endpoints are accessible without redirect
+# Camera URL: http://192.168.1.199:8080/browserfs.html
+#
+# Access via: https://YOUR_IP:8082/
+#
+# SECURITY WARNING:
+# - All public paths redirect to camera view
+# - Self-signed SSL certificate (browser will show warning)
+# - Add proper domain SSL cert for production
+
+# HTTPS server on port 8082
+server {
+    listen 8082 ssl default_server;
+    listen [::]:8082 ssl default_server;
+    server_name _;
+
+    ssl_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
+    ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Optional basic auth
+    # auth_basic "Restricted Access";
+    # auth_basic_user_file /etc/nginx/.camera_pass;
+
+    # Proxy settings
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+    proxy_buffering off;
+    proxy_buffers 8 4k;
+    proxy_buffer_size 4k;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Allow the view page itself
+    location = /browserfs.html {
+        proxy_pass http://192.168.1.199:8080/browserfs.html;
+    }
+
+    # Video stream
+    location = /video {
+        proxy_pass http://192.168.1.199:8080/video;
+    }
+
+    # Audio stream
+    location = /audio.wav {
+        proxy_pass http://192.168.1.199:8080/audio.wav;
+    }
+
+    # Videostatus endpoint (polled by JS)
+    location = /videostatus {
+        proxy_pass http://192.168.1.199:8080/videostatus;
+    }
+
+    # Static assets (CSS, JS, images, fonts)
+    location ~ ^/(css|js|images|ico|fonts)/ {
+        proxy_pass http://192.168.1.199:8080;
+    }
+
+    location ~ \.(?:css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|otf|json|webm|mp4)$ {
+        proxy_pass http://192.168.1.199:8080;
+    }
+
+    # Everything else -> redirect to camera view
+    location / {
+        return 301 https://$host:8082/browserfs.html;
+    }
+
+    access_log /var/log/nginx/camera-proxy.access.log;
+    error_log /var/log/nginx/camera-proxy.error.log;
+}
